@@ -57,6 +57,7 @@ pub fn build(b: *std.build.Builder) !void {
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.addPackage(initial_pkg);
+    exe.addPackage(preprocessor_pkg);
     exe.linkLibC();
     exe.install();
 

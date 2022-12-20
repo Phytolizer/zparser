@@ -46,7 +46,7 @@ pub fn breakLines(a: std.mem.Allocator, input: []u8) !Lines {
         input_it = input_it[end.pos + end.len ..];
     }
 
-    return Lines.init(lines);
+    return Lines.init(lines, input);
 }
 
 fn testInput(input: []const u8, expected: []const []const u8) !void {
