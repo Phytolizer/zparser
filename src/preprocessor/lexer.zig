@@ -234,8 +234,7 @@ pub fn lex(a: std.mem.Allocator, input: []const u8) ![]Token {
 fn testInput(input: []const u8, expected: []const Token) !void {
     const result = try lex(std.testing.allocator, input);
     defer std.testing.allocator.free(result);
-
-    std.testing.expectEqual(expected.len, result.len) catch |e| {
+    errdefer {
         std.debug.print("expected:\n", .{});
         for (expected) |tok| {
             std.debug.print("    {any}\n", .{tok.kind});
@@ -244,8 +243,9 @@ fn testInput(input: []const u8, expected: []const Token) !void {
         for (result) |tok| {
             std.debug.print("    {any}\n", .{tok.kind});
         }
-        return e;
-    };
+    }
+
+    try std.testing.expectEqual(expected.len, result.len);
     const str = struct {
         fn str(t: Token) ?[]const u8 {
             return switch (t.kind) {
