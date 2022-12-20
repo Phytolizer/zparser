@@ -69,11 +69,6 @@ pub fn build(b: *std.build.Builder) !void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    const initial_tests = b.addTest("src/initial/main.zig");
-    initial_tests.setTarget(target);
-    initial_tests.setBuildMode(mode);
-    initial_tests.linkLibC();
-
     const test_step = b.step("test", "Run unit tests");
 
     for (pkgs) |pkg| {
