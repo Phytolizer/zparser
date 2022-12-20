@@ -27,7 +27,7 @@ const Lexer = struct {
 
     fn isHash(tk: Token.Kind) bool {
         return switch (tk) {
-            .punctuator => |p| p == '#',
+            .punct => |p| p == .hash,
             else => false,
         };
     }
@@ -37,6 +37,16 @@ const Lexer = struct {
             self.in_directive = true;
 
         return .{ .kind = tk };
+    }
+
+    fn peek(self: @This()) ?u8 {
+        if (self.pos + 1 >= self.input.len) return null;
+        return self.input[self.pos + 1];
+    }
+
+    fn peekN(self: @This(), n: usize) ?u8 {
+        if (self.pos + n >= self.input.len) return null;
+        return self.input[self.pos + n];
     }
 
     fn skipWhitespace(self: *@This()) void {
@@ -150,34 +160,232 @@ const Lexer = struct {
             '<' => if (self.get()) |second| switch (second) {
                 ':' => {
                     self.move();
-                    return self.endToken(.{ .punctuator = '[' });
+                    return self.endToken(.{ .punct = .lbrack });
                 },
                 '%' => {
                     self.move();
-                    return self.endToken(.{ .punctuator = '{' });
+                    return self.endToken(.{ .punct = .lbrace });
                 },
                 else => {},
             },
             '%' => if (self.get()) |second| switch (second) {
                 '>' => {
                     self.move();
-                    return self.endToken(.{ .punctuator = '}' });
+                    return self.endToken(.{ .punct = .rbrace });
                 },
                 ':' => {
                     self.move();
-                    return self.endToken(.{ .punctuator = '#' });
+                    return self.endToken(.{ .punct = .hash });
                 },
                 else => {},
             },
             ':' => if (self.get()) |second| if (second == '>') {
                 self.move();
-                return self.endToken(.{ .punctuator = ']' });
+                return self.endToken(.{ .punct = .rbrack });
             },
             else => {},
         }
 
-        // Otherwise, return the character.
-        return self.endToken(.{ .punctuator = first });
+        // This is not a digraph.
+        return switch (first) {
+            '[' => self.endToken(.{ .punct = .lbrack }),
+            ']' => self.endToken(.{ .punct = .rbrack }),
+            '(' => self.endToken(.{ .punct = .lparen }),
+            ')' => self.endToken(.{ .punct = .rparen }),
+            '.' => {
+                if (self.get()) |p| switch (p) {
+                    '.' => {
+                        if (self.peek()) |p2| if (p2 == '.') {
+                            self.move();
+                            self.move();
+                            return self.endToken(.{ .punct = .ellipsis });
+                        };
+                    },
+                    else => {},
+                };
+                return self.endToken(.{ .punct = .period });
+            },
+            '-' => {
+                if (self.get()) |p| switch (p) {
+                    '>' => {
+                        self.move();
+                        return self.endToken(.{ .punct = .arrow });
+                    },
+                    '-' => {
+                        self.move();
+                        return self.endToken(.{ .punct = .minus_minus });
+                    },
+                    '=' => {
+                        self.move();
+                        return self.endToken(.{ .punct = .minus_eq });
+                    },
+                    else => {},
+                };
+                return self.endToken(.{ .punct = .minus });
+            },
+            '+' => {
+                if (self.get()) |p| switch (p) {
+                    '+' => {
+                        self.move();
+                        return self.endToken(.{ .punct = .plus_plus });
+                    },
+                    '=' => {
+                        self.move();
+                        return self.endToken(.{ .punct = .plus_eq });
+                    },
+                    else => {},
+                };
+                return self.endToken(.{ .punct = .plus });
+            },
+            '&' => {
+                if (self.get()) |p| switch (p) {
+                    '&' => {
+                        self.move();
+                        return self.endToken(.{ .punct = .amp_amp });
+                    },
+                    '=' => {
+                        self.move();
+                        return self.endToken(.{ .punct = .amp_eq });
+                    },
+                    else => {},
+                };
+                return self.endToken(.{ .punct = .amp });
+            },
+            '*' => {
+                if (self.get()) |p| switch (p) {
+                    '=' => {
+                        self.move();
+                        return self.endToken(.{ .punct = .star_eq });
+                    },
+                    else => {},
+                };
+                return self.endToken(.{ .punct = .star });
+            },
+            '~' => self.endToken(.{ .punct = .tilde }),
+            '!' => {
+                if (self.get()) |p| switch (p) {
+                    '=' => {
+                        self.move();
+                        return self.endToken(.{ .punct = .bang_eq });
+                    },
+                    else => {},
+                };
+                return self.endToken(.{ .punct = .bang });
+            },
+            '/' => {
+                if (self.get()) |p| switch (p) {
+                    '=' => {
+                        self.move();
+                        return self.endToken(.{ .punct = .slash_eq });
+                    },
+                    else => {},
+                };
+                return self.endToken(.{ .punct = .slash });
+            },
+            '%' => {
+                if (self.get()) |p| switch (p) {
+                    '=' => {
+                        self.move();
+                        return self.endToken(.{ .punct = .percent_eq });
+                    },
+                    else => {},
+                };
+                return self.endToken(.{ .punct = .percent });
+            },
+            '<' => {
+                if (self.get()) |p| switch (p) {
+                    '=' => {
+                        self.move();
+                        return self.endToken(.{ .punct = .lt_eq });
+                    },
+                    '<' => {
+                        self.move();
+                        if (self.get()) |p2| switch (p2) {
+                            '=' => {
+                                self.move();
+                                return self.endToken(.{ .punct = .lt_lt_eq });
+                            },
+                            else => {},
+                        };
+                        return self.endToken(.{ .punct = .lt_lt });
+                    },
+                    else => {},
+                };
+                return self.endToken(.{ .punct = .lt });
+            },
+            '>' => {
+                if (self.get()) |p| switch (p) {
+                    '=' => {
+                        self.move();
+                        return self.endToken(.{ .punct = .gt_eq });
+                    },
+                    '>' => {
+                        self.move();
+                        if (self.get()) |p2| switch (p2) {
+                            '=' => {
+                                self.move();
+                                return self.endToken(.{ .punct = .gt_gt_eq });
+                            },
+                            else => {},
+                        };
+                        return self.endToken(.{ .punct = .gt_gt });
+                    },
+                    else => {},
+                };
+                return self.endToken(.{ .punct = .gt });
+            },
+            '=' => {
+                if (self.get()) |p| switch (p) {
+                    '=' => {
+                        self.move();
+                        return self.endToken(.{ .punct = .eq_eq });
+                    },
+                    else => {},
+                };
+                return self.endToken(.{ .punct = .eq });
+            },
+            '^' => {
+                if (self.get()) |p| switch (p) {
+                    '=' => {
+                        self.move();
+                        return self.endToken(.{ .punct = .caret_eq });
+                    },
+                    else => {},
+                };
+                return self.endToken(.{ .punct = .caret });
+            },
+            '|' => {
+                if (self.get()) |p| switch (p) {
+                    '|' => {
+                        self.move();
+                        return self.endToken(.{ .punct = .pipe_pipe });
+                    },
+                    '=' => {
+                        self.move();
+                        return self.endToken(.{ .punct = .pipe_eq });
+                    },
+                    else => {},
+                };
+                return self.endToken(.{ .punct = .pipe });
+            },
+            '?' => self.endToken(.{ .punct = .question }),
+            ':' => self.endToken(.{ .punct = .colon }),
+            ',' => self.endToken(.{ .punct = .comma }),
+            '#' => {
+                if (self.get()) |p| switch (p) {
+                    '#' => {
+                        self.move();
+                        return self.endToken(.{ .punct = .hash_hash });
+                    },
+                    else => {},
+                };
+                return self.endToken(.{ .punct = .hash });
+            },
+            '{' => self.endToken(.{ .punct = .lbrace }),
+            '}' => self.endToken(.{ .punct = .rbrace }),
+            ';' => self.endToken(.{ .punct = .semicolon }),
+            else => unreachable,
+        };
     }
 
     pub fn scanOther(self: *@This()) Token {
@@ -293,31 +501,31 @@ test "numbers" {
 }
 
 test "punctuators" {
-    try testInput("()[]{}:;.,->*+&|~^!%/?=<", &[_]Token{
-        .{ .kind = .{ .punctuator = '(' } },
-        .{ .kind = .{ .punctuator = ')' } },
-        .{ .kind = .{ .punctuator = '[' } },
-        .{ .kind = .{ .punctuator = ']' } },
-        .{ .kind = .{ .punctuator = '{' } },
-        .{ .kind = .{ .punctuator = '}' } },
-        .{ .kind = .{ .punctuator = ':' } },
-        .{ .kind = .{ .punctuator = ';' } },
-        .{ .kind = .{ .punctuator = '.' } },
-        .{ .kind = .{ .punctuator = ',' } },
-        .{ .kind = .{ .punctuator = '-' } },
-        .{ .kind = .{ .punctuator = '>' } },
-        .{ .kind = .{ .punctuator = '*' } },
-        .{ .kind = .{ .punctuator = '+' } },
-        .{ .kind = .{ .punctuator = '&' } },
-        .{ .kind = .{ .punctuator = '|' } },
-        .{ .kind = .{ .punctuator = '~' } },
-        .{ .kind = .{ .punctuator = '^' } },
-        .{ .kind = .{ .punctuator = '!' } },
-        .{ .kind = .{ .punctuator = '%' } },
-        .{ .kind = .{ .punctuator = '/' } },
-        .{ .kind = .{ .punctuator = '?' } },
-        .{ .kind = .{ .punctuator = '=' } },
-        .{ .kind = .{ .punctuator = '<' } },
+    try testInput("()[]{}:;.,>-*+&|~^!%/?=<", &[_]Token{
+        .{ .kind = .{ .punct = .lparen } },
+        .{ .kind = .{ .punct = .rparen } },
+        .{ .kind = .{ .punct = .lbrack } },
+        .{ .kind = .{ .punct = .rbrack } },
+        .{ .kind = .{ .punct = .lbrace } },
+        .{ .kind = .{ .punct = .rbrace } },
+        .{ .kind = .{ .punct = .colon } },
+        .{ .kind = .{ .punct = .semicolon } },
+        .{ .kind = .{ .punct = .period } },
+        .{ .kind = .{ .punct = .comma } },
+        .{ .kind = .{ .punct = .gt } },
+        .{ .kind = .{ .punct = .minus } },
+        .{ .kind = .{ .punct = .star } },
+        .{ .kind = .{ .punct = .plus } },
+        .{ .kind = .{ .punct = .amp } },
+        .{ .kind = .{ .punct = .pipe } },
+        .{ .kind = .{ .punct = .tilde } },
+        .{ .kind = .{ .punct = .caret } },
+        .{ .kind = .{ .punct = .bang } },
+        .{ .kind = .{ .punct = .percent } },
+        .{ .kind = .{ .punct = .slash } },
+        .{ .kind = .{ .punct = .question } },
+        .{ .kind = .{ .punct = .eq } },
+        .{ .kind = .{ .punct = .lt } },
         .{ .kind = .eof },
     });
 }
@@ -338,23 +546,23 @@ test "c-like" {
         \\    return 0;
         \\}
     , &[_]Token{
-        .{ .kind = .{ .punctuator = '#' } },
+        .{ .kind = .{ .punct = .hash } },
         .{ .kind = .{ .ident = "include" } },
         .{ .kind = .{ .string_lit = "<stdio.h>" } },
         .{ .kind = .{ .ident = "int" } },
         .{ .kind = .{ .ident = "main" } },
-        .{ .kind = .{ .punctuator = '(' } },
-        .{ .kind = .{ .punctuator = ')' } },
-        .{ .kind = .{ .punctuator = '{' } },
+        .{ .kind = .{ .punct = .lparen } },
+        .{ .kind = .{ .punct = .rparen } },
+        .{ .kind = .{ .punct = .lbrace } },
         .{ .kind = .{ .ident = "printf" } },
-        .{ .kind = .{ .punctuator = '(' } },
+        .{ .kind = .{ .punct = .lparen } },
         .{ .kind = .{ .string_lit = "\"Hello, world!\"" } },
-        .{ .kind = .{ .punctuator = ')' } },
-        .{ .kind = .{ .punctuator = ';' } },
+        .{ .kind = .{ .punct = .rparen } },
+        .{ .kind = .{ .punct = .semicolon } },
         .{ .kind = .{ .ident = "return" } },
         .{ .kind = .{ .number = "0" } },
-        .{ .kind = .{ .punctuator = ';' } },
-        .{ .kind = .{ .punctuator = '}' } },
+        .{ .kind = .{ .punct = .semicolon } },
+        .{ .kind = .{ .punct = .rbrace } },
         .{ .kind = .eof },
     });
 }
@@ -366,19 +574,19 @@ test "digraphs" {
         \\%: %:%:
         \\%:%:
     , &[_]Token{
-        .{ .kind = .{ .punctuator = '[' } },
-        .{ .kind = .{ .punctuator = ']' } },
-        .{ .kind = .{ .punctuator = '[' } },
-        .{ .kind = .{ .punctuator = ']' } },
-        .{ .kind = .{ .punctuator = '{' } },
-        .{ .kind = .{ .punctuator = '}' } },
-        .{ .kind = .{ .punctuator = '{' } },
-        .{ .kind = .{ .punctuator = '}' } },
-        .{ .kind = .{ .punctuator = '#' } },
-        .{ .kind = .{ .punctuator = '#' } },
-        .{ .kind = .{ .punctuator = '#' } },
-        .{ .kind = .{ .punctuator = '#' } },
-        .{ .kind = .{ .punctuator = '#' } },
+        .{ .kind = .{ .punct = .lbrack } },
+        .{ .kind = .{ .punct = .rbrack } },
+        .{ .kind = .{ .punct = .lbrack } },
+        .{ .kind = .{ .punct = .rbrack } },
+        .{ .kind = .{ .punct = .lbrace } },
+        .{ .kind = .{ .punct = .rbrace } },
+        .{ .kind = .{ .punct = .lbrace } },
+        .{ .kind = .{ .punct = .rbrace } },
+        .{ .kind = .{ .punct = .hash } },
+        .{ .kind = .{ .punct = .hash } },
+        .{ .kind = .{ .punct = .hash } },
+        .{ .kind = .{ .punct = .hash } },
+        .{ .kind = .{ .punct = .hash } },
         .{ .kind = .eof },
     });
 }
@@ -386,12 +594,11 @@ test "digraphs" {
 test "angle brackets are not an include" {
     try testInput("3<4&&4>5", &[_]Token{
         .{ .kind = .{ .number = "3" } },
-        .{ .kind = .{ .punctuator = '<' } },
+        .{ .kind = .{ .punct = .lt } },
         .{ .kind = .{ .number = "4" } },
-        .{ .kind = .{ .punctuator = '&' } },
-        .{ .kind = .{ .punctuator = '&' } },
+        .{ .kind = .{ .punct = .amp_amp } },
         .{ .kind = .{ .number = "4" } },
-        .{ .kind = .{ .punctuator = '>' } },
+        .{ .kind = .{ .punct = .gt } },
         .{ .kind = .{ .number = "5" } },
         .{ .kind = .eof },
     });
@@ -413,10 +620,10 @@ test "char escape" {
 
 test "header name is not escaped" {
     try testInput("#include <\\>>", &[_]Token{
-        .{ .kind = .{ .punctuator = '#' } },
+        .{ .kind = .{ .punct = .hash } },
         .{ .kind = .{ .ident = "include" } },
         .{ .kind = .{ .string_lit = "<\\>" } },
-        .{ .kind = .{ .punctuator = '>' } },
+        .{ .kind = .{ .punct = .gt } },
         .{ .kind = .eof },
     });
 }
