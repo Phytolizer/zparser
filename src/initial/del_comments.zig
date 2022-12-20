@@ -100,7 +100,7 @@ fn shouldEmit(ch: u8, comments: *Comments) ?Emit {
 /// Args:
 /// - `lines`: A pointer to an array of `Line` objects. The modified array is
 ///            returned via this argument.
-pub fn del_comments(lines: *Lines) !void {
+pub fn delComments(lines: *Lines) !void {
     const a = lines.inner.allocator;
 
     // holds the current line, minus comments. lines may be merged
@@ -151,13 +151,13 @@ test "escaped comments" {
     const input = @embedFile("tests/escaped_comments.c");
     const dupe_input = try std.testing.allocator.dupe(u8, input);
     defer std.testing.allocator.free(dupe_input);
-    var lines = try @import("break_lines.zig").break_lines(
+    var lines = try @import("break_lines.zig").breakLines(
         std.testing.allocator,
         dupe_input,
     );
     defer lines.deinit();
-    try @import("merge_escaped_newlines.zig").merge_escaped_newlines(&lines);
-    try @import("del_comments.zig").del_comments(&lines);
+    try @import("merge_escaped_newlines.zig").mergeEscapedNewlines(&lines);
+    try delComments(&lines);
     const expected = [_][]const u8{"  #   define FOO 1020"};
     try std.testing.expectEqual(expected.len, lines.inner.items.len);
     for (expected) |line, i| {

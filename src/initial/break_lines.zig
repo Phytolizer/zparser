@@ -15,7 +15,7 @@ const Lines = @import("Lines.zig");
 ///
 /// Returns:
 /// A list of lines contained in the input sequence.
-pub fn break_lines(a: std.mem.Allocator, input: []u8) !Lines {
+pub fn breakLines(a: std.mem.Allocator, input: []u8) !Lines {
     var lines = std.ArrayList(Line).init(a);
     errdefer lines.deinit();
 
@@ -49,7 +49,7 @@ test "break lines" {
     const input = "hello\r\nworld\nfoo\rbar";
     const dupe_input = try std.testing.allocator.dupe(u8, input);
     defer std.testing.allocator.free(dupe_input);
-    const lines = try break_lines(std.testing.allocator, dupe_input);
+    const lines = try breakLines(std.testing.allocator, dupe_input);
     defer lines.deinit();
     const expected = [_][]const u8{ "hello", "world", "foo\rbar" };
     try std.testing.expectEqual(expected.len, lines.inner.items.len);

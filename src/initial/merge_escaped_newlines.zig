@@ -11,7 +11,7 @@ const Lines = @import("Lines.zig");
 /// Args:
 /// - `lines`: A pointer to an array of `Line` objects. The modified array is
 ///            returned via this argument.
-pub fn merge_escaped_newlines(lines: *Lines) !void {
+pub fn mergeEscapedNewlines(lines: *Lines) !void {
     const a = lines.inner.allocator;
     // holds merged lines temporarily
     var builder = std.ArrayList(u8).init(a);
@@ -60,12 +60,12 @@ test "escaped newline" {
     const input = @embedFile("tests/escaped_newline.c");
     const dupe_input = try std.testing.allocator.dupe(u8, input);
     defer std.testing.allocator.free(dupe_input);
-    var lines = try @import("break_lines.zig").break_lines(
+    var lines = try @import("break_lines.zig").breakLines(
         std.testing.allocator,
         dupe_input,
     );
     defer lines.deinit();
-    try @import("merge_escaped_newlines.zig").merge_escaped_newlines(&lines);
+    try mergeEscapedNewlines(&lines);
     const expected = [_][]const u8{
         "#include <stdio.h>",
         "",

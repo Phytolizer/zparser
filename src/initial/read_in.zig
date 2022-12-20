@@ -8,7 +8,7 @@ const std = @import("std");
 ///
 /// Returns:
 /// The contents of the file as a byte array.
-pub fn read_in(a: std.mem.Allocator, path: []const u8) ![]u8 {
+pub fn readIn(a: std.mem.Allocator, path: []const u8) ![]u8 {
     var file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
 
