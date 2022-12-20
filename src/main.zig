@@ -7,6 +7,7 @@ pub fn main() !void {
         try initial.read_in(std.testing.allocator, "main.c"),
     );
     try initial.merge_escaped_newlines(&lines);
+    try initial.del_comments(&lines);
     for (lines.inner.items) |line| {
         std.debug.print("{s}\n", .{line.items});
     }
