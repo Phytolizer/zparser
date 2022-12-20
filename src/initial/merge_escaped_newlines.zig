@@ -56,8 +56,7 @@ pub fn mergeEscapedNewlines(lines: *Lines) !void {
     lines.shrink(wr);
 }
 
-test "escaped newline" {
-    const input = @embedFile("tests/escaped_newline.c");
+fn testInput(input: []const u8, expected: []const []const u8) !void {
     const dupe_input = try std.testing.allocator.dupe(u8, input);
     defer std.testing.allocator.free(dupe_input);
     var lines = try @import("break_lines.zig").breakLines(
@@ -66,15 +65,85 @@ test "escaped newline" {
     );
     defer lines.deinit();
     try mergeEscapedNewlines(&lines);
-    const expected = [_][]const u8{
-        "#include <stdio.h>",
-        "",
-        "int main() {",
-        "  printf(\"ur mom\\n\");",
-        "}",
-    };
     try std.testing.expectEqual(expected.len, lines.inner.items.len);
     for (expected) |line, i| {
         try std.testing.expectEqualStrings(line, lines.inner.items[i].items);
     }
+}
+
+test "escaped newline" {
+    const input =
+        \\#include <stdio.h>
+        \\
+        \\int main() {
+        \\  printf("hi \
+        \\mom\n");
+        \\}
+    ;
+    const expected = [_][]const u8{
+        "#include <stdio.h>",
+        "",
+        "int main() {",
+        "  printf(\"hi mom\\n\");",
+        "}",
+    };
+    try testInput(input, &expected);
+}
+
+test "no escaped newlines" {
+    const input =
+        \\#include <stdio.h>
+        \\
+        \\int main() {
+        \\  printf("hi mom\n");
+        \\}
+    ;
+    const expected = [_][]const u8{
+        "#include <stdio.h>",
+        "",
+        "int main() {",
+        "  printf(\"hi mom\\n\");",
+        "}",
+    };
+    try testInput(input, &expected);
+}
+
+test "multiple escaped newlines" {
+    const input =
+        \\#include <stdio.h>
+        \\
+        \\int main() {
+        \\  printf("hi \
+        \\mom \
+        \\how are you?\n");
+        \\}
+    ;
+    const expected = [_][]const u8{
+        "#include <stdio.h>",
+        "",
+        "int main() {",
+        "  printf(\"hi mom how are you?\\n\");",
+        "}",
+    };
+    try testInput(input, &expected);
+}
+
+test "empty escaped newline" {
+    const input =
+        \\#include <stdio.h>
+        \\
+        \\int main() {
+        \\  printf("hi \
+        \\\
+        \\mom\n");
+        \\}
+    ;
+    const expected = [_][]const u8{
+        "#include <stdio.h>",
+        "",
+        "int main() {",
+        "  printf(\"hi mom\\n\");",
+        "}",
+    };
+    try testInput(input, &expected);
 }

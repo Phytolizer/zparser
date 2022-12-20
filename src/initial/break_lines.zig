@@ -45,15 +45,37 @@ pub fn breakLines(a: std.mem.Allocator, input: []u8) !Lines {
     return Lines.init(lines);
 }
 
-test "break lines" {
-    const input = "hello\r\nworld\nfoo\rbar";
+fn testInput(input: []const u8, expected: []const []const u8) !void {
     const dupe_input = try std.testing.allocator.dupe(u8, input);
     defer std.testing.allocator.free(dupe_input);
     const lines = try breakLines(std.testing.allocator, dupe_input);
     defer lines.deinit();
-    const expected = [_][]const u8{ "hello", "world", "foo\rbar" };
     try std.testing.expectEqual(expected.len, lines.inner.items.len);
     for (expected) |line, i| {
         try std.testing.expectEqualStrings(line, lines.inner.items[i].items);
     }
+}
+
+test "empty input" {
+    const input = "";
+    const expected = [_][]const u8{};
+    try testInput(input, &expected);
+}
+
+test "consecutive breaks" {
+    const input = "\n\n\n";
+    const expected = [_][]const u8{ "", "", "" };
+    try testInput(input, &expected);
+}
+
+test "one line" {
+    const input = "hello";
+    const expected = [_][]const u8{"hello"};
+    try testInput(input, &expected);
+}
+
+test "mixed newline styles" {
+    const input = "hello\r\nworld\nhow are you\rdoing?";
+    const expected = [_][]const u8{ "hello", "world", "how are you\rdoing?" };
+    try testInput(input, &expected);
 }

@@ -53,7 +53,7 @@ fn shouldEmit(ch: u8, comments: *Comments) ?Emit {
     if (comments.in_line_comment and ch == '\n') {
         // end of line comment
         comments.in_line_comment = false;
-        return .{ .ch = ' ' };
+        return .{ .ch = ' ', .pop_count = 1 };
     }
     if (comments.in_line_comment or comments.in_block_comment) {
         // still in comment...
@@ -147,8 +147,7 @@ pub fn delComments(lines: *Lines) !void {
     lines.shrink(wr);
 }
 
-test "escaped comments" {
-    const input = @embedFile("tests/escaped_comments.c");
+fn testInput(input: []const u8, expected: []const []const u8) !void {
     const dupe_input = try std.testing.allocator.dupe(u8, input);
     defer std.testing.allocator.free(dupe_input);
     var lines = try @import("break_lines.zig").breakLines(
@@ -158,9 +157,85 @@ test "escaped comments" {
     defer lines.deinit();
     try @import("merge_escaped_newlines.zig").mergeEscapedNewlines(&lines);
     try delComments(&lines);
-    const expected = [_][]const u8{"  #   define FOO 1020"};
     try std.testing.expectEqual(expected.len, lines.inner.items.len);
     for (expected) |line, i| {
-        try std.testing.expectEqualStrings(line, lines.inner.items[i].items);
+        try std.testing.expectEqualSlices(u8, line, lines.inner.items[i].items);
     }
+}
+
+test "no comments" {
+    const input = "foo bar baz";
+    const expected = [_][]const u8{"foo bar baz"};
+    try testInput(input, &expected);
+}
+
+test "line and block comments" {
+    const input =
+        \\#include <stdio.h> // this is a line comment
+        \\
+        \\int main() {
+        \\  /* this is a
+        \\     block comment */
+        \\  printf("hi\n");
+        \\}
+    ;
+    const expected = [_][]const u8{
+        "#include <stdio.h>  ",
+        "",
+        "int main() {",
+        "   ",
+        "  printf(\"hi\\n\");",
+        "}",
+    };
+    try testInput(input, &expected);
+}
+
+test "comment in string literal" {
+    const input =
+        \\#include <stdio.h>
+        \\
+        \\int main() {
+        \\  printf("/* this is a comment */");
+        \\}
+    ;
+    const expected = [_][]const u8{
+        "#include <stdio.h>",
+        "",
+        "int main() {",
+        "  printf(\"/* this is a comment */\");",
+        "}",
+    };
+    try testInput(input, &expected);
+}
+
+test "escaped quotes in string literal" {
+    const input =
+        \\#include <stdio.h>
+        \\
+        \\int main() {
+        \\  printf("foo \"bar\" baz");
+        \\}
+    ;
+    const expected = [_][]const u8{
+        "#include <stdio.h>",
+        "",
+        "int main() {",
+        "  printf(\"foo \\\"bar\\\" baz\");",
+        "}",
+    };
+    try testInput(input, &expected);
+}
+
+test "complex" {
+    const input =
+        \\/\
+        \\*
+        \\*/ # /*
+        \\*/ defi\
+        \\ne FO\
+        \\O 10\
+        \\20
+    ;
+    const expected = [_][]const u8{"  #   define FOO 1020"};
+    try testInput(input, &expected);
 }
