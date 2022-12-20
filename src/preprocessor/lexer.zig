@@ -200,6 +200,9 @@ const Lexer = struct {
                 // `<` could have been a normal punctuator
                 return self.scanPunct();
             },
+            // This part is awkward because of the other symbols handled above.
+            // We can't do a whole range because it would overlap,
+            // and that's not allowed in switch statements.
             '!',
             '#',
             '%'...'&',
