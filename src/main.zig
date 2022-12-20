@@ -19,7 +19,7 @@ pub fn main() !void {
     initial_arena.deinit();
     defer a.free(input);
 
-    const tokens = try preprocessor.lexer.lex(a, input);
+    const tokens = try preprocessor.lex(a, input);
     defer a.free(tokens);
 
     for (tokens) |tok| {

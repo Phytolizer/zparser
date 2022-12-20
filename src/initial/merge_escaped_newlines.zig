@@ -58,7 +58,6 @@ pub fn mergeEscapedNewlines(lines: *Lines) !void {
 
 fn testInput(input: []const u8, expected: []const []const u8) !void {
     const dupe_input = try std.testing.allocator.dupe(u8, input);
-    defer std.testing.allocator.free(dupe_input);
     var lines = try @import("break_lines.zig").breakLines(
         std.testing.allocator,
         dupe_input,

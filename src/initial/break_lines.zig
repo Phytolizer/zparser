@@ -51,7 +51,6 @@ pub fn breakLines(a: std.mem.Allocator, input: []u8) !Lines {
 
 fn testInput(input: []const u8, expected: []const []const u8) !void {
     const dupe_input = try std.testing.allocator.dupe(u8, input);
-    defer std.testing.allocator.free(dupe_input);
     const lines = try breakLines(std.testing.allocator, dupe_input);
     defer lines.deinit();
     try std.testing.expectEqual(expected.len, lines.inner.items.len);
