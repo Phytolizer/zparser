@@ -36,7 +36,11 @@ pub fn breakLines(a: std.mem.Allocator, input: []u8) !Lines {
             break :blk EndLen{ .pos = input_it.len, .len = 0 };
         };
         // slice the line out of the input
-        const line = input_it[0..end.pos];
+        var line = input_it[0..end.pos];
+        if (end.len > 0) {
+            line = input_it[0 .. end.pos + 1];
+            line[end.pos] = '\n';
+        }
         try lines.append(Line.initRef(line));
         // advance the input iterator
         input_it = input_it[end.pos + end.len ..];
@@ -64,7 +68,7 @@ test "empty input" {
 
 test "consecutive breaks" {
     const input = "\n\n\n";
-    const expected = [_][]const u8{ "", "", "" };
+    const expected = [_][]const u8{ "\n", "\n", "\n" };
     try testInput(input, &expected);
 }
 
@@ -76,6 +80,6 @@ test "one line" {
 
 test "mixed newline styles" {
     const input = "hello\r\nworld\nhow are you\rdoing?";
-    const expected = [_][]const u8{ "hello", "world", "how are you\rdoing?" };
+    const expected = [_][]const u8{ "hello\n", "world\n", "how are you\rdoing?" };
     try testInput(input, &expected);
 }

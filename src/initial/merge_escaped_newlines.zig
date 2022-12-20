@@ -22,9 +22,9 @@ pub fn mergeEscapedNewlines(lines: *Lines) !void {
 
     while (rd < lines.inner.items.len) {
         const line = lines.inner.items[rd].items;
-        if (std.mem.endsWith(u8, line, "\\")) {
+        if (std.mem.endsWith(u8, line, "\\\n")) {
             // remove the backslash, keep building line
-            try builder.appendSlice(line[0 .. line.len - 1]);
+            try builder.appendSlice(line[0 .. line.len - 2]);
         } else {
             if (builder.items.len == 0) {
                 // if builder is empty, just take the line as-is
@@ -81,10 +81,10 @@ test "escaped newline" {
         \\}
     ;
     const expected = [_][]const u8{
-        "#include <stdio.h>",
-        "",
-        "int main() {",
-        "  printf(\"hi mom\\n\");",
+        "#include <stdio.h>\n",
+        "\n",
+        "int main() {\n",
+        "  printf(\"hi mom\\n\");\n",
         "}",
     };
     try testInput(input, &expected);
@@ -99,10 +99,10 @@ test "no escaped newlines" {
         \\}
     ;
     const expected = [_][]const u8{
-        "#include <stdio.h>",
-        "",
-        "int main() {",
-        "  printf(\"hi mom\\n\");",
+        "#include <stdio.h>\n",
+        "\n",
+        "int main() {\n",
+        "  printf(\"hi mom\\n\");\n",
         "}",
     };
     try testInput(input, &expected);
@@ -119,10 +119,10 @@ test "multiple escaped newlines" {
         \\}
     ;
     const expected = [_][]const u8{
-        "#include <stdio.h>",
-        "",
-        "int main() {",
-        "  printf(\"hi mom how are you?\\n\");",
+        "#include <stdio.h>\n",
+        "\n",
+        "int main() {\n",
+        "  printf(\"hi mom how are you?\\n\");\n",
         "}",
     };
     try testInput(input, &expected);
@@ -139,11 +139,32 @@ test "empty escaped newline" {
         \\}
     ;
     const expected = [_][]const u8{
-        "#include <stdio.h>",
-        "",
-        "int main() {",
-        "  printf(\"hi mom\\n\");",
+        "#include <stdio.h>\n",
+        "\n",
+        "int main() {\n",
+        "  printf(\"hi mom\\n\");\n",
         "}",
+    };
+    try testInput(input, &expected);
+}
+
+test "do not remove backslash at end of file" {
+    const input =
+        \\#include <stdio.h>
+        \\
+        \\int main() {
+        \\  printf("hi \
+        \\mom");
+        \\}
+        \\\
+    ;
+    const expected = [_][]const u8{
+        "#include <stdio.h>\n",
+        "\n",
+        "int main() {\n",
+        "  printf(\"hi mom\");\n",
+        "}\n",
+        "\\",
     };
     try testInput(input, &expected);
 }
