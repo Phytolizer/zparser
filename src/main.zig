@@ -13,7 +13,3 @@ pub fn main() !void {
         std.debug.print("{s}\n", .{line.items});
     }
 }
-
-test {
-    std.testing.refAllDeclsRecursive(@This());
-}
