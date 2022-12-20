@@ -5,25 +5,51 @@ const initial_pkg = std.build.Pkg{
     .source = .{ .path = "src/initial/main.zig" },
 };
 
-fn printer(comptime msg: []const u8) fn (*std.build.Step) anyerror!void {
+const preprocessor_pkg = std.build.Pkg{
+    .name = "preprocessor",
+    .source = .{ .path = "src/preprocessor/main.zig" },
+    .dependencies = &.{initial_pkg},
+};
+
+const pkgs = [_]std.build.Pkg{
+    initial_pkg,
+    preprocessor_pkg,
+};
+
+fn PrintStep(comptime fmt: []const u8, comptime Args: type) type {
     return struct {
-        fn f(_: *std.build.Step) anyerror!void {
-            std.debug.print("{s}\n", .{msg});
+        step: std.build.Step,
+        args: Args,
+
+        const Self = @This();
+
+        pub fn init(a: std.mem.Allocator, args: Args) !*Self {
+            const result = try a.create(Self);
+            result.* = Self{
+                .step = std.build.Step.init(.custom, "print", a, run),
+                .args = args,
+            };
+            return result;
         }
-    }.f;
+
+        pub fn run(step_in: *std.build.Step) anyerror!void {
+            const self = @fieldParentPtr(Self, "step", step_in);
+            std.debug.print(fmt ++ "\n", self.args);
+        }
+    };
 }
 
 fn add_print_step(
     b: *std.build.Builder,
-    comptime msg: []const u8,
     parent: *std.build.Step,
-) void {
-    const step = b.step("print", msg);
-    step.makeFn = printer(msg);
-    parent.dependOn(step);
+    comptime msg: []const u8,
+    args: anytype,
+) !void {
+    const ps = try PrintStep(msg, @TypeOf(args)).init(b.allocator, args);
+    parent.dependOn(&ps.step);
 }
 
-pub fn build(b: *std.build.Builder) void {
+pub fn build(b: *std.build.Builder) !void {
     const target = b.standardTargetOptions(.{});
     const mode = b.standardReleaseOptions();
 
@@ -48,15 +74,22 @@ pub fn build(b: *std.build.Builder) void {
     initial_tests.setBuildMode(mode);
     initial_tests.linkLibC();
 
-    const exe_tests = b.addTest("src/main.zig");
-    exe_tests.setTarget(target);
-    exe_tests.setBuildMode(mode);
-    exe_tests.linkLibC();
-    exe_tests.addPackage(initial_pkg);
-
     const test_step = b.step("test", "Run unit tests");
-    add_print_step(b, "[TEST] initial", test_step);
-    test_step.dependOn(&initial_tests.step);
-    add_print_step(b, "[TEST] exe", test_step);
-    test_step.dependOn(&exe_tests.step);
+
+    for (pkgs) |pkg| {
+        const path = try std.fmt.allocPrint(
+            b.allocator,
+            "src/{s}/main.zig",
+            .{pkg.name},
+        );
+        const tests = b.addTest(path);
+        tests.setTarget(target);
+        tests.setBuildMode(mode);
+        tests.linkLibC();
+        if (pkg.dependencies) |deps| for (deps) |dep| {
+            tests.addPackage(dep);
+        };
+        try add_print_step(b, test_step, "[TEST] {s}", .{pkg.name});
+        test_step.dependOn(&tests.step);
+    }
 }
