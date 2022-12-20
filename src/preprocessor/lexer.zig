@@ -396,3 +396,18 @@ test "angle brackets are not an include" {
         .{ .kind = .eof },
     });
 }
+
+test "string escape" {
+    try testInput("\"\\\"\\n\\t\\\\\"", &[_]Token{
+        .{ .kind = .{ .string_lit = "\"\\\"\\n\\t\\\\\"" } },
+        .{ .kind = .eof },
+    });
+}
+
+test "unterminated string" {
+    try testInput("\"hi world\nbye", &[_]Token{
+        .{ .kind = .{ .other = "\"hi world" } },
+        .{ .kind = .{ .ident = "bye" } },
+        .{ .kind = .eof },
+    });
+}
