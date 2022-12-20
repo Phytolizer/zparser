@@ -2,10 +2,24 @@ const std = @import("std");
 const Line = @import("Line.zig");
 const Lines = @import("Lines.zig");
 
+/// Breaks a sequence of bytes into a list of lines.
+///
+/// This function takes in a sequence of bytes and breaks it into a list of
+/// lines, where a line is defined as a sequence of bytes terminated by a
+/// newline character (either `\n` or `\r\n`). The input bytes are processed
+/// iteratively and the lines are appended to an output list.
+///
+/// Args:
+/// - `a`: The allocator to use for creating the output list.
+/// - `input`: The input sequence of bytes to be broken into lines.
+///
+/// Returns:
+/// A list of lines contained in the input sequence.
 pub fn break_lines(a: std.mem.Allocator, input: []u8) !Lines {
     var lines = std.ArrayList(Line).init(a);
     errdefer lines.deinit();
 
+    // input iterator
     var input_it = input;
 
     while (input_it.len > 0) {
@@ -18,10 +32,13 @@ pub fn break_lines(a: std.mem.Allocator, input: []u8) !Lines {
             if (std.mem.indexOfScalar(u8, input_it, '\n')) |i| {
                 break :blk EndLen{ .pos = i, .len = 1 };
             }
+            // no newline found, return the rest of the input
             break :blk EndLen{ .pos = input_it.len, .len = 0 };
         };
+        // slice the line out of the input
         const line = input_it[0..end.pos];
         try lines.append(Line.initRef(line));
+        // advance the input iterator
         input_it = input_it[end.pos + end.len ..];
     }
 

@@ -2,18 +2,39 @@ const std = @import("std");
 const Line = @import("Line.zig");
 const Lines = @import("Lines.zig");
 
+/// Tracks the state of comments in a sequence of lines.
 const Comments = struct {
+    /// Whether the current position is within a string literal.
     in_string: bool = false,
+    /// Whether the current position is within a block comment.
     in_block_comment: bool = false,
+    /// Whether the current position is within a line comment.
     in_line_comment: bool = false,
+    /// The previous character that was processed.
     prev_char: u8 = 0,
 };
 
+/// Represents a character to be emitted.
 const Emit = struct {
+    /// The character to be emitted.
     ch: u8,
+    /// The number of characters to remove from the emitted output before emitting `ch`.
     pop_count: usize = 0,
 };
 
+/// Determines whether a character should be emitted and, if so, yields the
+/// modified character and updates the `Comments` struct as needed.
+///
+/// This function processes a single character and determines whether it should
+/// be emitted or discarded based on the current state of the `Comments` struct.
+/// It also updates the `Comments` struct as necessary based on the character
+/// being processed, and yields the modified character (if it is to be emitted)
+/// along with any necessary backtracking of previously emitted output.
+///
+/// Args:
+/// - `ch`: The character to be processed.
+/// - `comments`: A pointer to the `Comments` struct that tracks the state of
+///               comments in the input.
 fn shouldEmit(ch: u8, comments: *Comments) ?Emit {
     // string literals override all other rules
     if (comments.in_string) {
@@ -70,17 +91,34 @@ fn shouldEmit(ch: u8, comments: *Comments) ?Emit {
     return .{ .ch = ch };
 }
 
+/// Remove comments from the `lines` array.
+///
+/// This function processes each line of the input array in turn, and removes
+/// any comments that it encounters. The resulting array will contain only the
+/// non-comment parts of the original lines.
+///
+/// Args:
+/// - `lines`: A pointer to an array of `Line` objects. The modified array is
+///            returned via this argument.
 pub fn del_comments(lines: *Lines) !void {
     const a = lines.inner.allocator;
+
+    // holds the current line, minus comments. lines may be merged
     var builder = std.ArrayList(u8).init(a);
     defer builder.deinit();
+
+    // tracks comment state
     var comments = Comments{};
+
+    // read/write indices
     var rd: usize = 0;
     var wr: usize = 0;
-    while (rd < lines.inner.items.len) : (rd += 1) {
+
+    while (rd < lines.inner.items.len) {
         const line = lines.inner.items[rd].items;
         for (line) |ch| {
             if (shouldEmit(ch, &comments)) |emit| {
+                // backtrack if needed via pop_count
                 const new_len = builder.items.len - emit.pop_count;
                 builder.shrinkRetainingCapacity(new_len);
                 try builder.append(emit.ch);
@@ -89,6 +127,7 @@ pub fn del_comments(lines: *Lines) !void {
             comments.prev_char = ch;
         }
 
+        // terminate line comment
         if (shouldEmit('\n', &comments)) |emit| {
             const new_len = builder.items.len - emit.pop_count;
             builder.shrinkRetainingCapacity(new_len);
@@ -101,6 +140,8 @@ pub fn del_comments(lines: *Lines) !void {
             );
             wr += 1;
         }
+
+        rd += 1;
     }
 
     lines.shrink(wr);
