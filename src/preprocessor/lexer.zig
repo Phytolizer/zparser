@@ -404,6 +404,23 @@ test "string escape" {
     });
 }
 
+test "char escape" {
+    try testInput("'\\''", &[_]Token{
+        .{ .kind = .{ .string_lit = "'\\''" } },
+        .{ .kind = .eof },
+    });
+}
+
+test "header name is not escaped" {
+    try testInput("#include <\\>>", &[_]Token{
+        .{ .kind = .{ .punctuator = '#' } },
+        .{ .kind = .{ .ident = "include" } },
+        .{ .kind = .{ .string_lit = "<\\>" } },
+        .{ .kind = .{ .punctuator = '>' } },
+        .{ .kind = .eof },
+    });
+}
+
 test "unterminated string" {
     try testInput("\"hi world\nbye", &[_]Token{
         .{ .kind = .{ .other = "\"hi world" } },
