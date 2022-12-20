@@ -10,10 +10,13 @@ pub fn main() !void {
     var args = std.process.args();
     _ = args.next();
     const filename = args.next() orelse return error.InvalidInput;
-    var lines = try initial.breakLines(a, try initial.readIn(a, filename));
+    var initial_arena = std.heap.ArenaAllocator.init(a);
+    const raw = try initial.readIn(initial_arena.allocator(), filename);
+    var lines = try initial.breakLines(initial_arena.allocator(), raw);
     try initial.mergeEscapedNewlines(&lines);
     try initial.delComments(&lines);
-    const input = try initial.unlines(lines);
+    const input = try initial.unlines(a, lines);
+    initial_arena.deinit();
     defer a.free(input);
 
     const tokens = try preprocessor.lexer.lex(a, input);
