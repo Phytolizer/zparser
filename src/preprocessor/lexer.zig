@@ -381,9 +381,12 @@ test "digraphs" {
 }
 
 test "angle brackets are not an include" {
-    try testInput("3<4>5", &[_]Token{
+    try testInput("3<4&&4>5", &[_]Token{
         .{ .kind = .{ .number = "3" } },
         .{ .kind = .{ .punctuator = '<' } },
+        .{ .kind = .{ .number = "4" } },
+        .{ .kind = .{ .punctuator = '&' } },
+        .{ .kind = .{ .punctuator = '&' } },
         .{ .kind = .{ .number = "4" } },
         .{ .kind = .{ .punctuator = '>' } },
         .{ .kind = .{ .number = "5" } },
