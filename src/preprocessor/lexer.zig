@@ -36,6 +36,7 @@ const Lexer = struct {
         if (self.at_line_start and isHash(tk))
             self.in_directive = true;
 
+        self.at_line_start = false;
         return .{ .kind = tk };
     }
 
@@ -53,8 +54,10 @@ const Lexer = struct {
         while (self.get()) |ch| switch (ch) {
             ' ', '\t', '\r' => self.move(),
             '\n' => {
+                const should_yield_eol = self.in_directive;
                 self.move();
-                return .{ .kind = .eol };
+                if (should_yield_eol)
+                    return .{ .kind = .eol };
             },
             else => break,
         };
@@ -491,10 +494,7 @@ test "empty file" {
 }
 
 test "whitespace" {
-    try testInput(" \t\r\n", &[_]Token{
-        .{ .kind = .eol },
-        .{ .kind = .eof },
-    });
+    try testInput(" \t\r\n", &[_]Token{.{ .kind = .eof }});
 }
 
 test "identifiers" {
@@ -573,17 +573,14 @@ test "c-like" {
         .{ .kind = .{ .punct = .lparen } },
         .{ .kind = .{ .punct = .rparen } },
         .{ .kind = .{ .punct = .lbrace } },
-        .{ .kind = .eol },
         .{ .kind = .{ .ident = "printf" } },
         .{ .kind = .{ .punct = .lparen } },
         .{ .kind = .{ .string_lit = "\"Hello, world!\"" } },
         .{ .kind = .{ .punct = .rparen } },
         .{ .kind = .{ .punct = .semicolon } },
-        .{ .kind = .eol },
         .{ .kind = .{ .ident = "return" } },
         .{ .kind = .{ .number = "0" } },
         .{ .kind = .{ .punct = .semicolon } },
-        .{ .kind = .eol },
         .{ .kind = .{ .punct = .rbrace } },
         .{ .kind = .eof },
     });
@@ -600,12 +597,10 @@ test "digraphs" {
         .{ .kind = .{ .punct = .rbrack } },
         .{ .kind = .{ .punct = .lbrack } },
         .{ .kind = .{ .punct = .rbrack } },
-        .{ .kind = .eol },
         .{ .kind = .{ .punct = .lbrace } },
         .{ .kind = .{ .punct = .rbrace } },
         .{ .kind = .{ .punct = .lbrace } },
         .{ .kind = .{ .punct = .rbrace } },
-        .{ .kind = .eol },
         .{ .kind = .{ .punct = .hash } },
         .{ .kind = .{ .punct = .hash_hash } },
         .{ .kind = .eol },
@@ -654,7 +649,6 @@ test "header name is not escaped" {
 test "unterminated string" {
     try testInput("\"hi world\nbye", &[_]Token{
         .{ .kind = .{ .other = "\"hi world" } },
-        .{ .kind = .eol },
         .{ .kind = .{ .ident = "bye" } },
         .{ .kind = .eof },
     });
