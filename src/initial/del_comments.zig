@@ -160,15 +160,6 @@ pub fn delComments(lines: *Lines) !void {
                 comments.prev_char = ch;
         }
 
-        // // terminate line comment
-        // if (shouldEmit(0, &comments)) |emit| {
-        //     backtrack(&builder, emit.pop_count);
-        //     try builder.append(.{
-        //         .ch = emit.ch,
-        //         .trivial = false,
-        //         .synthetic = true,
-        //     });
-        // }
         if (!comments.in_block_comment) {
             // copy the line to output
             lines.inner.items[wr].replace(
