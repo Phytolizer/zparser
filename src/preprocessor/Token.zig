@@ -80,9 +80,15 @@ pub const Kind = union(enum) {
     ) !void {
         switch (self) {
             .ident => |ident| try writer.print("{{ident '{s}'}}", .{ident}),
-            .string_lit => |string_lit| try writer.print("{{string_lit '{s}'}}", .{string_lit}),
+            .string_lit => |string_lit| try writer.print(
+                "{{string_lit '{s}'}}",
+                .{string_lit},
+            ),
             .number => |number| try writer.print("{{number '{s}'}}", .{number}),
-            .punct => |p| try writer.print("{{punct {s}}}", .{std.meta.fieldNames(@TypeOf(p))[@enumToInt(p)]}),
+            .punct => |p| try writer.print(
+                "{{punct {s}}}",
+                .{std.meta.fieldNames(@TypeOf(p))[@enumToInt(p)]},
+            ),
             .other => |other| try writer.print("{{other '{s}'}}", .{other}),
             .eol => try writer.writeAll("{EOL}"),
             .eof => try writer.writeAll("{EOF}"),

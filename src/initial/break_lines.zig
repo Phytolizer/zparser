@@ -79,6 +79,10 @@ test "one line" {
 
 test "mixed newline styles" {
     const input = "hello\r\nworld\nhow are you\rdoing?";
-    const expected = [_][]const u8{ "hello\n", "world\n", "how are you\rdoing?" };
+    const expected = [_][]const u8{
+        "hello\n",
+        "world\n",
+        "how are you\rdoing?",
+    };
     try testInput(input, &expected);
 }

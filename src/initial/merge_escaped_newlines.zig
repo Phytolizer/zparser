@@ -91,7 +91,8 @@ fn testInput(input: []const u8, expected: []const []const u8) !void {
     );
     defer lines.deinit();
     try mergeEscapedNewlines(&lines);
-    const expected_joined = try std.mem.join(std.testing.allocator, "\n", expected);
+    const expected_joined =
+        try std.mem.join(std.testing.allocator, "\n", expected);
     defer std.testing.allocator.free(expected_joined);
     var actual_joined = std.ArrayList(u8).init(std.testing.allocator);
     defer actual_joined.deinit();

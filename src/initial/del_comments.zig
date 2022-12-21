@@ -19,7 +19,8 @@ const Comments = struct {
 const Emit = struct {
     /// The character to be emitted.
     ch: u8,
-    /// The number of characters to remove from the emitted output before emitting `ch`.
+    /// The number of characters to remove from the emitted output before
+    /// emitting `ch`.
     pop_count: usize = 0,
 };
 
@@ -195,7 +196,8 @@ fn testInput(input: []const u8, expected: []const []const u8) !void {
             std.debug.print("\n", .{});
         }
     }
-    const expected_joined = try std.mem.join(std.testing.allocator, "\n", expected);
+    const expected_joined =
+        try std.mem.join(std.testing.allocator, "\n", expected);
     defer std.testing.allocator.free(expected_joined);
     var actual_joined = std.ArrayList(u8).init(std.testing.allocator);
     defer actual_joined.deinit();
