@@ -21,8 +21,6 @@ const Emit = struct {
     ch: u8,
     /// The number of characters to remove from the emitted output before emitting `ch`.
     pop_count: usize = 0,
-    /// Whether to skip over the last pushed character before popping.
-    skip_last: bool = false,
 };
 
 /// Determines whether a character should be emitted and, if so, yields the
@@ -51,12 +49,12 @@ fn shouldEmit(ch: u8, comments: *Comments) ?Emit {
     if (comments.in_block_comment and ch == '/' and comments.prev_char == '*') {
         // end of block comment
         comments.in_block_comment = false;
-        return .{ .ch = ' ', .pop_count = 2 };
+        return null;
     }
     if (comments.in_line_comment and ch == '\n') {
         // end of line comment
         comments.in_line_comment = false;
-        return .{ .ch = ' ', .pop_count = 2, .skip_last = true };
+        return .{ .ch = ch };
     }
     if (comments.in_line_comment or comments.in_block_comment) {
         // still in comment...
@@ -69,14 +67,14 @@ fn shouldEmit(ch: u8, comments: *Comments) ?Emit {
             if (comments.prev_char == '/') {
                 // start of line comment
                 comments.in_line_comment = true;
-                return null;
+                return .{ .ch = ' ', .pop_count = 2 };
             }
         },
         '*' => {
             if (comments.prev_char == '/') {
                 // start of block comment
                 comments.in_block_comment = true;
-                return null;
+                return .{ .ch = ' ', .pop_count = 2 };
             }
         },
         '"' => {
@@ -84,25 +82,20 @@ fn shouldEmit(ch: u8, comments: *Comments) ?Emit {
             comments.in_string = !comments.in_string;
             return .{ .ch = ch };
         },
-        0 => {
-            return null;
-        },
         else => {},
     }
     // something else
     return .{ .ch = ch };
 }
 
-fn backtrack(builder: *Builders, pop_count: usize, skip_last: bool) void {
+fn backtrack(builder: *Builders, pop_count: usize) void {
     var popped: usize = 0;
     var i: usize = builder.text.items.len;
     while (popped < pop_count) {
         while (i > 0 and builder.trivial.items[i - 1])
             i -= 1;
 
-        if (skip_last and popped == 0) {
-            i -= 1;
-        } else builder.trivial.items[i - 1] = true;
+        builder.trivial.items[i - 1] = true;
         popped += 1;
     }
 }
@@ -138,22 +131,13 @@ pub fn delComments(lines: *Lines) !void {
             try builder.synthetic.append(line.synthetic[i]);
 
             if (shouldEmit(ch, &comments)) |emit| {
-                backtrack(&builder, emit.pop_count, emit.skip_last);
-                if (emit.ch != ch) {
+                backtrack(&builder, emit.pop_count);
+                if (emit.ch != ch)
                     try builder.append(.{
                         .ch = emit.ch,
                         .trivial = false,
                         .synthetic = true,
                     });
-                    if (emit.skip_last) {
-                        // swap last 2, push semantically happens after backtracking
-                        std.mem.swap(
-                            u8,
-                            &builder.text.items[builder.text.items.len - 2],
-                            &builder.text.items[builder.text.items.len - 1],
-                        );
-                    }
-                }
             } else builder.trivial.items[builder.trivial.items.len - 1] = true;
 
             if (!line.trivial[i])
@@ -297,5 +281,11 @@ test "complex" {
         \\20
     ;
     const expected = [_][]const u8{"  #   define FOO 1020"};
+    try testInput(input, &expected);
+}
+
+test "line comment at eof" {
+    const input = "foo bar baz // this is a line comment";
+    const expected = [_][]const u8{"foo bar baz  "};
     try testInput(input, &expected);
 }
