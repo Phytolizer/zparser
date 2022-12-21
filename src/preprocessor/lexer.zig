@@ -49,11 +49,16 @@ const Lexer = struct {
         return self.input[self.pos + n];
     }
 
-    fn skipWhitespace(self: *@This()) void {
+    fn skipWhitespace(self: *@This()) ?Token {
         while (self.get()) |ch| switch (ch) {
-            ' ', '\t', '\r', '\n' => self.move(),
+            ' ', '\t', '\r' => self.move(),
+            '\n' => {
+                self.move();
+                return .{ .kind = .eol };
+            },
             else => break,
         };
+        return null;
     }
 
     fn scanIdent(self: *@This()) Token {
@@ -175,6 +180,15 @@ const Lexer = struct {
                 },
                 ':' => {
                     self.move();
+
+                    if (self.get()) |third|
+                        if (self.peek()) |fourth|
+                            if (third == '%' and fourth == ':') {
+                                self.move();
+                                self.move();
+                                return self.endToken(.{ .punct = .hash_hash });
+                            };
+
                     return self.endToken(.{ .punct = .hash });
                 },
                 else => {},
@@ -395,7 +409,8 @@ const Lexer = struct {
     }
 
     pub fn next(self: *@This()) ?Token {
-        self.skipWhitespace();
+        if (self.skipWhitespace()) |t| return t;
+
         if (self.get()) |first| switch (first) {
             'a'...'z', 'A'...'Z', '_' => return self.scanIdent(),
             '0'...'9', '.' => return self.scanNumber() orelse {
@@ -476,7 +491,10 @@ test "empty file" {
 }
 
 test "whitespace" {
-    try testInput(" \t\r\n", &[_]Token{.{ .kind = .eof }});
+    try testInput(" \t\r\n", &[_]Token{
+        .{ .kind = .eol },
+        .{ .kind = .eof },
+    });
 }
 
 test "identifiers" {
@@ -549,19 +567,23 @@ test "c-like" {
         .{ .kind = .{ .punct = .hash } },
         .{ .kind = .{ .ident = "include" } },
         .{ .kind = .{ .string_lit = "<stdio.h>" } },
+        .{ .kind = .eol },
         .{ .kind = .{ .ident = "int" } },
         .{ .kind = .{ .ident = "main" } },
         .{ .kind = .{ .punct = .lparen } },
         .{ .kind = .{ .punct = .rparen } },
         .{ .kind = .{ .punct = .lbrace } },
+        .{ .kind = .eol },
         .{ .kind = .{ .ident = "printf" } },
         .{ .kind = .{ .punct = .lparen } },
         .{ .kind = .{ .string_lit = "\"Hello, world!\"" } },
         .{ .kind = .{ .punct = .rparen } },
         .{ .kind = .{ .punct = .semicolon } },
+        .{ .kind = .eol },
         .{ .kind = .{ .ident = "return" } },
         .{ .kind = .{ .number = "0" } },
         .{ .kind = .{ .punct = .semicolon } },
+        .{ .kind = .eol },
         .{ .kind = .{ .punct = .rbrace } },
         .{ .kind = .eof },
     });
@@ -578,15 +600,16 @@ test "digraphs" {
         .{ .kind = .{ .punct = .rbrack } },
         .{ .kind = .{ .punct = .lbrack } },
         .{ .kind = .{ .punct = .rbrack } },
+        .{ .kind = .eol },
         .{ .kind = .{ .punct = .lbrace } },
         .{ .kind = .{ .punct = .rbrace } },
         .{ .kind = .{ .punct = .lbrace } },
         .{ .kind = .{ .punct = .rbrace } },
+        .{ .kind = .eol },
         .{ .kind = .{ .punct = .hash } },
-        .{ .kind = .{ .punct = .hash } },
-        .{ .kind = .{ .punct = .hash } },
-        .{ .kind = .{ .punct = .hash } },
-        .{ .kind = .{ .punct = .hash } },
+        .{ .kind = .{ .punct = .hash_hash } },
+        .{ .kind = .eol },
+        .{ .kind = .{ .punct = .hash_hash } },
         .{ .kind = .eof },
     });
 }
@@ -631,6 +654,7 @@ test "header name is not escaped" {
 test "unterminated string" {
     try testInput("\"hi world\nbye", &[_]Token{
         .{ .kind = .{ .other = "\"hi world" } },
+        .{ .kind = .eol },
         .{ .kind = .{ .ident = "bye" } },
         .{ .kind = .eof },
     });

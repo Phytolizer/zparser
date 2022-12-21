@@ -67,6 +67,8 @@ pub const Kind = union(enum) {
     },
     // anything else
     other: []const u8,
+    // end of line marker
+    eol,
     // end of file marker
     eof,
 
@@ -82,6 +84,7 @@ pub const Kind = union(enum) {
             .number => |number| try writer.print("{{number '{s}'}}", .{number}),
             .punct => |p| try writer.print("{{punct {s}}}", .{std.meta.fieldNames(@TypeOf(p))[@enumToInt(p)]}),
             .other => |other| try writer.print("{{other '{s}'}}", .{other}),
+            .eol => try writer.writeAll("{EOL}"),
             .eof => try writer.writeAll("{EOF}"),
         }
     }
