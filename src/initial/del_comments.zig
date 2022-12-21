@@ -136,7 +136,7 @@ pub fn delComments(lines: *Lines) !void {
         if (!comments.in_block_comment) {
             // copy the line to output
             lines.inner.items[wr].replace(
-                Line.initAlloc(a, try builder.toOwnedSlice()),
+                try Line.initAlloc(a, try builder.toOwnedSlice()),
             );
             wr += 1;
         }

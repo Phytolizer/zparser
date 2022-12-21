@@ -28,13 +28,13 @@ pub fn mergeEscapedNewlines(lines: *Lines) !void {
         } else {
             if (builder.items.len == 0) {
                 // if builder is empty, just take the line as-is
-                lines.inner.items[wr].replace(Line.initRef(line));
+                lines.inner.items[wr].replace(try Line.initRef(a, line));
                 wr += 1;
             } else {
                 // otherwise, append the line to the builder and take the result
                 try builder.appendSlice(line);
                 lines.inner.items[wr].replace(
-                    Line.initAlloc(a, try builder.toOwnedSlice()),
+                    try Line.initAlloc(a, try builder.toOwnedSlice()),
                 );
                 builder.clearRetainingCapacity();
                 wr += 1;
@@ -47,7 +47,7 @@ pub fn mergeEscapedNewlines(lines: *Lines) !void {
     // if anything leftover, take it
     if (builder.items.len > 0) {
         lines.inner.items[wr].replace(
-            Line.initAlloc(a, try builder.toOwnedSlice()),
+            try Line.initAlloc(a, try builder.toOwnedSlice()),
         );
         wr += 1;
     }
