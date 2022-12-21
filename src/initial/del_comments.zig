@@ -21,6 +21,8 @@ const Emit = struct {
     ch: u8,
     /// The number of characters to remove from the emitted output before emitting `ch`.
     pop_count: usize = 0,
+    /// Whether to skip over the last pushed character before popping.
+    skip_last: bool = false,
 };
 
 /// Determines whether a character should be emitted and, if so, yields the
@@ -49,12 +51,12 @@ fn shouldEmit(ch: u8, comments: *Comments) ?Emit {
     if (comments.in_block_comment and ch == '/' and comments.prev_char == '*') {
         // end of block comment
         comments.in_block_comment = false;
-        return .{ .ch = ' ', .pop_count = 1 };
+        return .{ .ch = ' ', .pop_count = 2 };
     }
     if (comments.in_line_comment and ch == '\n') {
         // end of line comment
         comments.in_line_comment = false;
-        return .{ .ch = ' ', .pop_count = 1 };
+        return .{ .ch = ' ', .pop_count = 2, .skip_last = true };
     }
     if (comments.in_line_comment or comments.in_block_comment) {
         // still in comment...
@@ -82,8 +84,7 @@ fn shouldEmit(ch: u8, comments: *Comments) ?Emit {
             comments.in_string = !comments.in_string;
             return .{ .ch = ch };
         },
-        '\n' => {
-            // newline just marks end of line, isn't really in input
+        0 => {
             return null;
         },
         else => {},
@@ -92,14 +93,18 @@ fn shouldEmit(ch: u8, comments: *Comments) ?Emit {
     return .{ .ch = ch };
 }
 
-fn backtrack(builder: *Builders, pop_count: usize) void {
-    const begin = builder.text.items.len - pop_count - 1;
-    const end = builder.text.items.len - 1;
-    std.mem.set(
-        bool,
-        builder.trivial.items[begin..end],
-        true,
-    );
+fn backtrack(builder: *Builders, pop_count: usize, skip_last: bool) void {
+    var popped: usize = 0;
+    var i: usize = builder.text.items.len;
+    while (popped < pop_count) {
+        while (i > 0 and builder.trivial.items[i - 1])
+            i -= 1;
+
+        if (skip_last and popped == 0) {
+            i -= 1;
+        } else builder.trivial.items[i - 1] = true;
+        popped += 1;
+    }
 }
 
 /// Remove comments from the `lines` array.
@@ -133,28 +138,37 @@ pub fn delComments(lines: *Lines) !void {
             try builder.synthetic.append(line.synthetic[i]);
 
             if (shouldEmit(ch, &comments)) |emit| {
-                backtrack(&builder, emit.pop_count);
-                if (emit.ch != ch)
+                backtrack(&builder, emit.pop_count, emit.skip_last);
+                if (emit.ch != ch) {
                     try builder.append(.{
                         .ch = emit.ch,
                         .trivial = false,
                         .synthetic = true,
                     });
+                    if (emit.skip_last) {
+                        // swap last 2, push semantically happens after backtracking
+                        std.mem.swap(
+                            u8,
+                            &builder.text.items[builder.text.items.len - 2],
+                            &builder.text.items[builder.text.items.len - 1],
+                        );
+                    }
+                }
             } else builder.trivial.items[builder.trivial.items.len - 1] = true;
 
-            comments.prev_char = ch;
+            if (!line.trivial[i])
+                comments.prev_char = ch;
         }
 
-        // terminate line comment
-        if (shouldEmit('\n', &comments)) |emit| {
-            backtrack(&builder, emit.pop_count);
-            if (emit.ch != '\n')
-                try builder.append(.{
-                    .ch = emit.ch,
-                    .trivial = false,
-                    .synthetic = true,
-                });
-        } else builder.trivial.items[builder.trivial.items.len - 1] = true;
+        // // terminate line comment
+        // if (shouldEmit(0, &comments)) |emit| {
+        //     backtrack(&builder, emit.pop_count);
+        //     try builder.append(.{
+        //         .ch = emit.ch,
+        //         .trivial = false,
+        //         .synthetic = true,
+        //     });
+        // }
         if (!comments.in_block_comment) {
             // copy the line to output
             lines.inner.items[wr].replace(
@@ -176,6 +190,16 @@ pub fn delComments(lines: *Lines) !void {
     lines.shrink(wr);
 }
 
+fn esc(ch: u8) []const u8 {
+    return switch (ch) {
+        '\n' => "\\n",
+        '\r' => "\\r",
+        '\t' => "\\t",
+        '\\' => "\\\\",
+        else => &[_]u8{ch},
+    };
+}
+
 fn testInput(input: []const u8, expected: []const []const u8) !void {
     const dupe_input = try std.testing.allocator.dupe(u8, input);
     var lines = try @import("break_lines.zig").breakLines(
@@ -185,6 +209,17 @@ fn testInput(input: []const u8, expected: []const []const u8) !void {
     defer lines.deinit();
     try @import("merge_escaped_newlines.zig").mergeEscapedNewlines(&lines);
     try delComments(&lines);
+    errdefer {
+        for (lines.inner.items) |line, i| {
+            std.debug.print("=== LINE {d} ===\n", .{i + 1});
+            for (line.items) |ch, j| {
+                std.debug.print("'{s}' is {s}trivial\n", .{
+                    .c = esc(ch),
+                    .s = if (line.trivial[j]) "" else "not ",
+                });
+            }
+        }
+    }
     const expected_joined = try std.mem.join(std.testing.allocator, "\n", expected);
     defer std.testing.allocator.free(expected_joined);
     var actual_joined = std.ArrayList(u8).init(std.testing.allocator);
