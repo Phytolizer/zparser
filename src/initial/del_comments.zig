@@ -1,6 +1,7 @@
 const std = @import("std");
 const Line = @import("Line.zig");
 const Lines = @import("Lines.zig");
+const Builders = @import("Builders.zig");
 
 /// Tracks the state of comments in a sequence of lines.
 const Comments = struct {
@@ -91,6 +92,16 @@ fn shouldEmit(ch: u8, comments: *Comments) ?Emit {
     return .{ .ch = ch };
 }
 
+fn backtrack(builder: *Builders, pop_count: usize) void {
+    const begin = builder.text.items.len - pop_count - 1;
+    const end = builder.text.items.len - 1;
+    std.mem.set(
+        bool,
+        builder.trivial.items[begin..end],
+        true,
+    );
+}
+
 /// Remove comments from the `lines` array.
 ///
 /// This function processes each line of the input array in turn, and removes
@@ -104,7 +115,7 @@ pub fn delComments(lines: *Lines) !void {
     const a = lines.inner.allocator;
 
     // holds the current line, minus comments. lines may be merged
-    var builder = std.ArrayList(u8).init(a);
+    var builder = Builders.init(a);
     defer builder.deinit();
 
     // tracks comment state
@@ -115,28 +126,46 @@ pub fn delComments(lines: *Lines) !void {
     var wr: usize = 0;
 
     while (rd < lines.inner.items.len) {
-        const line = lines.inner.items[rd].items;
-        for (line) |ch| {
+        const line = lines.inner.items[rd];
+        for (line.items) |ch, i| {
+            try builder.text.append(ch);
+            try builder.trivial.append(line.trivial[i]);
+            try builder.synthetic.append(line.synthetic[i]);
+
             if (shouldEmit(ch, &comments)) |emit| {
-                // backtrack if needed via pop_count
-                const new_len = builder.items.len - emit.pop_count;
-                builder.shrinkRetainingCapacity(new_len);
-                try builder.append(emit.ch);
-            }
+                backtrack(&builder, emit.pop_count);
+                if (emit.ch != ch)
+                    try builder.append(.{
+                        .ch = emit.ch,
+                        .trivial = false,
+                        .synthetic = true,
+                    });
+            } else builder.trivial.items[builder.trivial.items.len - 1] = true;
 
             comments.prev_char = ch;
         }
 
         // terminate line comment
         if (shouldEmit('\n', &comments)) |emit| {
-            const new_len = builder.items.len - emit.pop_count;
-            builder.shrinkRetainingCapacity(new_len);
-            try builder.append(emit.ch);
-        }
+            backtrack(&builder, emit.pop_count);
+            if (emit.ch != '\n')
+                try builder.append(.{
+                    .ch = emit.ch,
+                    .trivial = false,
+                    .synthetic = true,
+                });
+        } else builder.trivial.items[builder.trivial.items.len - 1] = true;
         if (!comments.in_block_comment) {
             // copy the line to output
             lines.inner.items[wr].replace(
-                try Line.initAlloc(a, try builder.toOwnedSlice()),
+                try Line.initAlloc(
+                    a,
+                    try builder.text.toOwnedSlice(),
+                    .{
+                        .trivial = try builder.trivial.toOwnedSlice(),
+                        .synthetic = try builder.synthetic.toOwnedSlice(),
+                    },
+                ),
             );
             wr += 1;
         }
@@ -156,10 +185,16 @@ fn testInput(input: []const u8, expected: []const []const u8) !void {
     defer lines.deinit();
     try @import("merge_escaped_newlines.zig").mergeEscapedNewlines(&lines);
     try delComments(&lines);
-    try std.testing.expectEqual(expected.len, lines.inner.items.len);
-    for (expected) |line, i| {
-        try std.testing.expectEqualSlices(u8, line, lines.inner.items[i].items);
+    const expected_joined = try std.mem.join(std.testing.allocator, "\n", expected);
+    defer std.testing.allocator.free(expected_joined);
+    var actual_joined = std.ArrayList(u8).init(std.testing.allocator);
+    defer actual_joined.deinit();
+    for (lines.inner.items) |line| {
+        const nontrivial = try line.getNonTrivial(std.testing.allocator);
+        defer std.testing.allocator.free(nontrivial);
+        try actual_joined.appendSlice(nontrivial);
     }
+    try std.testing.expectEqualStrings(expected_joined, actual_joined.items);
 }
 
 test "no comments" {
@@ -212,14 +247,14 @@ test "escaped quotes in string literal" {
         \\#include <stdio.h>
         \\
         \\int main() {
-        \\  printf("foo \"bar\" baz");
+        \\  printf("foo // \"bar\" baz");
         \\}
     ;
     const expected = [_][]const u8{
         "#include <stdio.h>",
         "",
         "int main() {",
-        "  printf(\"foo \\\"bar\\\" baz\");",
+        "  printf(\"foo // \\\"bar\\\" baz\");",
         "}",
     };
     try testInput(input, &expected);

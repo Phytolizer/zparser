@@ -1,6 +1,7 @@
 const std = @import("std");
 const Line = @import("Line.zig");
 const Lines = @import("Lines.zig");
+const Builders = @import("Builders.zig");
 
 /// Merge lines in the `lines` array if the previous line ends with a backslash
 /// character.
@@ -14,29 +15,50 @@ const Lines = @import("Lines.zig");
 pub fn mergeEscapedNewlines(lines: *Lines) !void {
     const a = lines.inner.allocator;
     // holds merged lines temporarily
-    var builder = std.ArrayList(u8).init(a);
+    var builder = Builders.init(a);
     defer builder.deinit();
     // read/write indices
     var rd: usize = 0;
     var wr: usize = 0;
 
     while (rd < lines.inner.items.len) {
-        const line = lines.inner.items[rd].items;
-        if (std.mem.endsWith(u8, line, "\\\n")) {
+        const line = &lines.inner.items[rd];
+        if (std.mem.endsWith(u8, line.items, "\\\n")) {
             // remove the backslash, keep building line
-            try builder.appendSlice(line[0 .. line.len - 2]);
+            try builder.text.appendSlice(line.items);
+            try builder.synthetic.appendSlice(line.synthetic);
+
+            // backslash and newline are now trivial
+            try builder.trivial.appendSlice(
+                line.trivial[0 .. line.trivial.len - 2],
+            );
+            try builder.trivial.appendSlice(&.{ true, true });
         } else {
-            if (builder.items.len == 0) {
+            if (builder.text.items.len == 0) {
                 // if builder is empty, just take the line as-is
-                lines.inner.items[wr].replace(try Line.initRef(a, line));
+                lines.inner.items[wr].replace(try Line.initRef(
+                    a,
+                    line.items,
+                    .{
+                        .trivial = line.takeTrivial(),
+                        .synthetic = line.takeSynthetic(),
+                    },
+                ));
                 wr += 1;
             } else {
                 // otherwise, append the line to the builder and take the result
-                try builder.appendSlice(line);
-                lines.inner.items[wr].replace(
-                    try Line.initAlloc(a, try builder.toOwnedSlice()),
-                );
-                builder.clearRetainingCapacity();
+                try builder.text.appendSlice(line.items);
+                try builder.trivial.appendSlice(line.trivial);
+                try builder.synthetic.appendSlice(line.synthetic);
+                lines.inner.items[wr].replace(try Line.initAlloc(
+                    a,
+                    try builder.text.toOwnedSlice(),
+                    .{
+                        .trivial = try builder.trivial.toOwnedSlice(),
+                        .synthetic = try builder.synthetic.toOwnedSlice(),
+                    },
+                ));
+                builder.clear();
                 wr += 1;
             }
         }
@@ -45,10 +67,15 @@ pub fn mergeEscapedNewlines(lines: *Lines) !void {
     }
 
     // if anything leftover, take it
-    if (builder.items.len > 0) {
-        lines.inner.items[wr].replace(
-            try Line.initAlloc(a, try builder.toOwnedSlice()),
-        );
+    if (builder.text.items.len > 0) {
+        lines.inner.items[wr].replace(try Line.initAlloc(
+            a,
+            try builder.text.toOwnedSlice(),
+            .{
+                .trivial = try builder.trivial.toOwnedSlice(),
+                .synthetic = try builder.synthetic.toOwnedSlice(),
+            },
+        ));
         wr += 1;
     }
 
@@ -64,10 +91,16 @@ fn testInput(input: []const u8, expected: []const []const u8) !void {
     );
     defer lines.deinit();
     try mergeEscapedNewlines(&lines);
-    try std.testing.expectEqual(expected.len, lines.inner.items.len);
-    for (expected) |line, i| {
-        try std.testing.expectEqualStrings(line, lines.inner.items[i].items);
+    const expected_joined = try std.mem.join(std.testing.allocator, "\n", expected);
+    defer std.testing.allocator.free(expected_joined);
+    var actual_joined = std.ArrayList(u8).init(std.testing.allocator);
+    defer actual_joined.deinit();
+    for (lines.inner.items) |line| {
+        const nontrivial = try line.getNonTrivial(std.testing.allocator);
+        defer std.testing.allocator.free(nontrivial);
+        try actual_joined.appendSlice(nontrivial);
     }
+    try std.testing.expectEqualStrings(expected_joined, actual_joined.items);
 }
 
 test "escaped newline" {
@@ -80,10 +113,10 @@ test "escaped newline" {
         \\}
     ;
     const expected = [_][]const u8{
-        "#include <stdio.h>\n",
-        "\n",
-        "int main() {\n",
-        "  printf(\"hi mom\\n\");\n",
+        "#include <stdio.h>",
+        "",
+        "int main() {",
+        "  printf(\"hi mom\\n\");",
         "}",
     };
     try testInput(input, &expected);
@@ -98,10 +131,10 @@ test "no escaped newlines" {
         \\}
     ;
     const expected = [_][]const u8{
-        "#include <stdio.h>\n",
-        "\n",
-        "int main() {\n",
-        "  printf(\"hi mom\\n\");\n",
+        "#include <stdio.h>",
+        "",
+        "int main() {",
+        "  printf(\"hi mom\\n\");",
         "}",
     };
     try testInput(input, &expected);
@@ -118,10 +151,10 @@ test "multiple escaped newlines" {
         \\}
     ;
     const expected = [_][]const u8{
-        "#include <stdio.h>\n",
-        "\n",
-        "int main() {\n",
-        "  printf(\"hi mom how are you?\\n\");\n",
+        "#include <stdio.h>",
+        "",
+        "int main() {",
+        "  printf(\"hi mom how are you?\\n\");",
         "}",
     };
     try testInput(input, &expected);
@@ -138,10 +171,10 @@ test "empty escaped newline" {
         \\}
     ;
     const expected = [_][]const u8{
-        "#include <stdio.h>\n",
-        "\n",
-        "int main() {\n",
-        "  printf(\"hi mom\\n\");\n",
+        "#include <stdio.h>",
+        "",
+        "int main() {",
+        "  printf(\"hi mom\\n\");",
         "}",
     };
     try testInput(input, &expected);
@@ -158,11 +191,11 @@ test "do not remove backslash at end of file" {
         \\\
     ;
     const expected = [_][]const u8{
-        "#include <stdio.h>\n",
-        "\n",
-        "int main() {\n",
-        "  printf(\"hi mom\");\n",
-        "}\n",
+        "#include <stdio.h>",
+        "",
+        "int main() {",
+        "  printf(\"hi mom\");",
+        "}",
         "\\",
     };
     try testInput(input, &expected);

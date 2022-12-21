@@ -41,7 +41,7 @@ pub fn breakLines(a: std.mem.Allocator, input: []u8) !Lines {
             line = input_it[0 .. end.pos + 1];
             line[end.pos] = '\n';
         }
-        try lines.append(try Line.initRef(a, line));
+        try lines.append(try Line.initRef(a, line, .{}));
         // advance the input iterator
         input_it = input_it[end.pos + end.len ..];
     }
