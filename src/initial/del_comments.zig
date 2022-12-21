@@ -185,14 +185,14 @@ fn testInput(input: []const u8, expected: []const []const u8) !void {
     try @import("merge_escaped_newlines.zig").mergeEscapedNewlines(&lines);
     try delComments(&lines);
     errdefer {
-        for (lines.inner.items) |line, i| {
-            std.debug.print("=== LINE {d} ===\n", .{i + 1});
+        for (lines.inner.items) |line| {
             for (line.items) |ch, j| {
-                std.debug.print("'{s}' is {s}trivial\n", .{
-                    .c = esc(ch),
-                    .s = if (line.trivial[j]) "" else "not ",
+                std.debug.print("[{s}]{s} ", .{
+                    esc(ch),
+                    if (line.trivial[j]) "*" else "",
                 });
             }
+            std.debug.print("\n", .{});
         }
     }
     const expected_joined = try std.mem.join(std.testing.allocator, "\n", expected);
