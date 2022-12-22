@@ -39,6 +39,79 @@ fn PrintStep(comptime fmt: []const u8, comptime Args: type) type {
     };
 }
 
+fn collectAllSrc(a: std.mem.Allocator) ![][]u8 {
+    var srcs = std.ArrayList([]u8).init(a);
+    var dir = try std.fs.cwd().openIterableDir(".", .{});
+    defer dir.close();
+    var walker = try dir.walk(a);
+    while (try walker.next()) |current| {
+        if (current.kind != .File or
+            !std.mem.endsWith(u8, current.path, ".zig") or
+            std.mem.indexOf(u8, current.path, "zig-cache") != null)
+        {
+            continue;
+        }
+
+        try srcs.append(try a.dupe(u8, current.path));
+    }
+
+    return try srcs.toOwnedSlice();
+}
+
+const CheckLineLengthsStep = struct {
+    step: std.build.Step,
+    a: std.mem.Allocator,
+
+    const max_line_len = 80;
+
+    const Self = @This();
+
+    pub fn init(a: std.mem.Allocator) !*Self {
+        const result = try a.create(Self);
+        result.* = .{
+            .step = std.build.Step.init(.custom, "check-line-lengths", a, run),
+            .a = a,
+        };
+        return result;
+    }
+
+    pub fn run(step_in: *std.build.Step) anyerror!void {
+        const self = @fieldParentPtr(Self, "step", step_in);
+
+        const srcs = try collectAllSrc(self.a);
+        for (srcs) |current| {
+            var file = try std.fs.cwd().openFile(current, .{});
+            defer file.close();
+            const reader = file.reader();
+            var line = try std.ArrayList(u8).initCapacity(self.a, 80);
+            var line_num: usize = 1;
+            while (true) : (line_num += 1) {
+                reader.readUntilDelimiterArrayList(
+                    &line,
+                    '\n',
+                    std.math.maxInt(usize),
+                ) catch |e| switch (e) {
+                    error.EndOfStream => break,
+                    else => return e,
+                };
+
+                if (line.items.len > max_line_len) {
+                    std.debug.print("{s}:{d}: line is too long\n{s}", .{
+                        current,
+                        line_num,
+                        line.items[0..max_line_len],
+                    });
+                    std.debug.print(
+                        "\x1b[31m{s}\x1b[0m\n",
+                        .{line.items[max_line_len..]},
+                    );
+                    std.debug.print(" " ** max_line_len ++ "^\n", .{});
+                }
+            }
+        }
+    }
+};
+
 fn add_print_step(
     b: *std.build.Builder,
     parent: *std.build.Step,
@@ -88,4 +161,17 @@ pub fn build(b: *std.build.Builder) !void {
         try add_print_step(b, test_step, "[TEST] {s}", .{pkg.name});
         test_step.dependOn(&tests.step);
     }
+
+    const check_line_lengths_step = b.step(
+        "check-line-lengths",
+        "Check line lengths of source",
+    );
+    const actual_check_line_lengths_step =
+        try CheckLineLengthsStep.init(b.allocator);
+    check_line_lengths_step.dependOn(&actual_check_line_lengths_step.step);
+
+    const srcs = try collectAllSrc(b.allocator);
+    const fmt_all = b.addFmt(srcs);
+    const fmt_step = b.step("fmt", "Format all sources");
+    fmt_step.dependOn(&fmt_all.step);
 }
