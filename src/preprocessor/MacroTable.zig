@@ -10,7 +10,7 @@ pub fn init(a: std.mem.Allocator) @This() {
     };
 }
 
-pub fn deinit(self: @This()) void {
+pub fn deinit(self: *@This()) void {
     var macro_it = self.macros.iterator();
     while (macro_it.next()) |ent| {
         self.a.free(ent.key_ptr.*);

@@ -31,6 +31,6 @@ pub fn init(a: std.mem.Allocator, tokens: []const Token) @This() {
     };
 }
 
-pub fn deinit(self: @This()) void {
+pub fn deinit(self: *@This()) void {
     self.macros.deinit();
 }

@@ -445,7 +445,7 @@ const Lexer = struct {
     }
 };
 
-pub fn lex(a: std.mem.Allocator, input: []const u8) ![]Token {
+pub fn lex(a: std.mem.Allocator, input: []const u8) !std.ArrayList(Token) {
     var lexer = Lexer.init(input);
     var tokens = std.ArrayList(Token).init(a);
     while (lexer.next()) |tok| {
@@ -454,24 +454,25 @@ pub fn lex(a: std.mem.Allocator, input: []const u8) ![]Token {
 
     try tokens.append(.{ .kind = .eof });
 
-    return try tokens.toOwnedSlice();
+    return tokens;
 }
 
 fn testInput(input: []const u8, expected: []const Token) !void {
     const result = try lex(std.testing.allocator, input);
-    defer std.testing.allocator.free(result);
+    defer result.deinit();
+    const actual = result.items;
     errdefer {
         std.debug.print("expected:\n", .{});
         for (expected) |tok| {
             std.debug.print("    {any}\n", .{tok.kind});
         }
-        std.debug.print("result:\n", .{});
-        for (result) |tok| {
+        std.debug.print("actual:\n", .{});
+        for (actual) |tok| {
             std.debug.print("    {any}\n", .{tok.kind});
         }
     }
 
-    try std.testing.expectEqual(expected.len, result.len);
+    try std.testing.expectEqual(expected.len, actual.len);
     const str = struct {
         fn str(t: Token) ?[]const u8 {
             return switch (t.kind) {
@@ -482,9 +483,9 @@ fn testInput(input: []const u8, expected: []const Token) !void {
     }.str;
     for (expected) |tok, i| {
         if (str(tok)) |t| {
-            try std.testing.expectEqualStrings(t, str(result[i]).?);
+            try std.testing.expectEqualStrings(t, str(actual[i]).?);
         } else {
-            try std.testing.expectEqual(tok, result[i]);
+            try std.testing.expectEqual(tok, actual[i]);
         }
     }
 }

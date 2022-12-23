@@ -20,9 +20,9 @@ pub fn main() !void {
     defer a.free(input);
 
     const tokens = try preprocessor.lex(a, input);
-    defer a.free(tokens);
+    defer tokens.deinit();
 
-    for (tokens) |tok| {
+    for (tokens.items) |tok| {
         std.debug.print("{}\n", .{tok.kind});
     }
 }
